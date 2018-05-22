@@ -45,7 +45,7 @@ public:
         bool IsLeaf;
         Direction Facing;
        
-        std::vector<Particle> Entities;
+        std::vector<Particle *> Entities;
        
         void Subdivide();
         void Render();
@@ -57,6 +57,10 @@ public:
         bool Insert     (Particle *object);
         bool IsContained(Particle *object);
         void Prune(Node *node);
+
+        bool Node::Intersects(Vec2 position, Vec2 size);
+
+std::vector<Particle*> Node::QueryRange(Vec2 position, Vec2 size);
 };
 
 

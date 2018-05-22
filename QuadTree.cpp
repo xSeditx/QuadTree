@@ -51,7 +51,7 @@ Node::~Node()
 Node::Node(Vec2 pos, Vec2 size)
     : Position(pos),
       Size(size),
-      Capacity(2),
+      Capacity(10),
       IsLeaf(true),
       Facing(NE)
 {
@@ -59,7 +59,7 @@ Node::Node(Vec2 pos, Vec2 size)
     SubNodes[NE] =
     SubNodes[SW] =
     SubNodes[SE] = nullptr;
-    Entities.reserve(4);
+    Entities.reserve(40);
 }
 
 
@@ -81,7 +81,7 @@ bool  Node::Insert(Particle *object)
         {
             if(Entities.size() < Capacity)     // And the Capacity of the Square is not full 
             {
-                Entities.push_back(*object);   // Than add this Object to the Current Object list and exit the function
+                Entities.push_back(object);   // Than add this Object to the Current Object list and exit the function
                 return true;
             }
             else                       // Else If its full than make the Node a Branch
@@ -89,9 +89,9 @@ bool  Node::Insert(Particle *object)
                 IsLeaf = false;  
                 Subdivide();           // And Subdivide it
 
-                for(Particle &object: Entities)  // Put the Particles that were in this Node in their respective SubNodes
+                for(Particle *object: Entities)  // Put the Particles that were in this Node in their respective SubNodes
                 {
-                   PushDown(&object);
+                   PushDown(object);
                 }
             
                 Entities.clear();             // And Delete the particles from this Now branch node
@@ -151,9 +151,12 @@ void  Node::Prune (Node *node)
                 Prune(node->SubNodes[i]);
             }
             delete node->SubNodes[i];
+            *node->SubNodes = nullptr;
         }
+
+           
         node->IsLeaf =true;
-        node->Entities.empty();
+        //node->Entities.empty();
     }
 
 }
@@ -239,12 +242,51 @@ void QT::Update()
  }
 
 
+bool  Node::Intersects(Vec2 position, Vec2 size)
+{
+   return !(position.x - size.x > Position.x + Size.x ||
+            position.x + size.x < Position.x - Size.x ||
+            position.y - size.y > Position.y + Size.y ||
+            position.y + size.y < Position.y - Size.y);
+            
+}
 
 
+std::vector<Particle*> Node::QueryRange(Vec2 position, Vec2 size)
+{
 
+std::vector<Particle *> results;
 
+    if (!(Intersects(position,size)))
+    {
+        return results; 
+    }
+    for_loop (Index, Entities.size())
+    {
+        if (IsContained(Entities[Index]))
+        {
+             results.push_back(Entities[Index]);
+        }
+    }
 
-  //  bool containsX = boundary.x0 <= data.latitude && data.latitude <= boundary.x1;
-  //  bool containsY = boundary.y0 <= data.longitude && data.longitude <= boundary.y1;
-  //  
-  //  return containsX && containsY;
+    if (IsLeaf == true)
+    {
+        return results;
+    }
+    
+    for_loop(SubIndex, 4)
+    {
+       std::vector<Particle*> S; 
+       S = SubNodes[SubIndex]->QueryRange(position,size);
+       if (S.size() > 0) 
+       {
+          results.insert(results.end(), S.begin(), S.end());
+       }
+    }
+
+    SCREEN->SET_DRAW_COLOR(RGB(0,255,0));
+    SCREEN->BOX(position.x - size.x, position.y - size.y,
+                position.x + size.x, position.y + size.y);
+
+return results;
+}
