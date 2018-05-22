@@ -1,4 +1,4 @@
-// *******Credit for Verctor classes and Matrix Code goes to Cherno and were written for his Sparky Game Engine.
+/// *******Credit for Verctor classes and Matrix Code goes to Cherno and were written for his Sparky Game Engine.
 
 
 #include "Vertex.h"
