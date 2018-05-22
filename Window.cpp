@@ -1,4 +1,4 @@
-//                                                                                                                                                                                                                                                                                                                                       
+                                                                                                                                                                                                                                                                                                                                      
 //                                                                                                                                                                                                                                                                                                                                       
 //        SDL FRAMEWORK FOR GRAPHICS OPERATIONS                                                                                                                                                                                                                                                                                                                        
 //                                                                                                                                                                                                                                                                                                                                       
@@ -17,28 +17,38 @@
 #include<iostream>
 #include<vector>
 
+
 #define __DEBUG_
 
 Window *SCREEN ={0};
+bool TERMINATE = false;
 int WINDOW_OFFSET = 1;
-int LEFT_BOUNDS = 0 + WINDOW_OFFSET;
-int TOP_BOUNDS = 0 + WINDOW_OFFSET;
-int RIGHT_BOUNDS = SCREENWIDTH - WINDOW_OFFSET;
+
+int LEFT_BOUNDS   = 0 + WINDOW_OFFSET;
+int TOP_BOUNDS    = 0 + WINDOW_OFFSET;
+int RIGHT_BOUNDS  = SCREENWIDTH  - WINDOW_OFFSET;
 int BOTTOM_BOUNDS = SCREENHEIGHT - WINDOW_OFFSET;
 
-float Cos[360];// = {0}, 
-float Sin[360]; // = {0};
+float Cos[360] = {0};
+float Sin[360] = {0};
  
+ int Widgit::NumberOfWidgits = 0;
+ std::vector<Widgit*> Widgit::WidgitList;
+ int GUI::FreeInstance = 0;
 
 // CONSTRUCTS A BASIC WINDOW AND BACKBUFFER ASSOCIATED WITH WINDOW
 
-
+//  HMENU mMenu = LoadMenu(GetModuleHandle(0), MAKEINTRESOURCE(IDR_MENU));
+//  SetMenu(mHandle, mMenu);
 
 //Submit GLMAPBUFFER();
+
+
 
 Window::~Window()
 {
     delete(WindowPixels);
+    if(thisGUI != NULL) delete(thisGUI);
 }
 Window::Window(int x,int y,int width,int height,char *title)
       : 
@@ -53,17 +63,24 @@ Window::Window(int x,int y,int width,int height,char *title)
         Mouse.MouseVelocity.x = 
         Mouse.MouseVelocity.y = 
         Mouse.Angle           = 0; // Initialize Mouse to Zero since no constructor currently exist
+        Mouse.Button.Left  = false;
+        Mouse.Button.Right = false;
 
+        Mouse.MouseVelocity.x = 0;
+        Mouse.MouseVelocity.y = 0;
+        Mouse.MousePosition.x = 0;
+        Mouse.MousePosition.y = 0;
+                                
 
         if(SDL_Init(SDL_INIT_VIDEO) !=0) Print("Init Video Error");
-        HWND = SDL_CreateWindow(TITLE, SDL_WINDOWPOS_UNDEFINED, 
-                                       SDL_WINDOWPOS_UNDEFINED, 
-                                       WIDTH, 
-                                       HEIGHT, 0); 
-        if(!HWND) Print("ERROR: Initializing SDL Window");
+        SDL_HWND = SDL_CreateWindow(TITLE, SDL_WINDOWPOS_UNDEFINED, 
+                                           SDL_WINDOWPOS_UNDEFINED, 
+                                           WIDTH, 
+                                           HEIGHT, 0); 
+        if(!SDL_HWND) Print("ERROR: Initializing SDL Window");
 
 
-        Renderer = SDL_CreateRenderer(HWND, -1, SDL_RENDERER_ACCELERATED);                                                          
+        Renderer = SDL_CreateRenderer(SDL_HWND, -1, SDL_RENDERER_ACCELERATED);                                                          
         
         if(!Renderer) Print("ERROR: Initializing SDL Renderer");
             
@@ -77,17 +94,24 @@ Window::Window(int x,int y,int width,int height,char *title)
 
         SDL_SetRenderTarget(Renderer, BackBuffer);
 
-        SDL_SetWindowResizable(HWND, SDL_TRUE);
+        SDL_SetWindowResizable(SDL_HWND, SDL_TRUE);
         
-        WindowSurface   = SDL_GetWindowSurface     (HWND);
-        WindowFormat    = SDL_GetWindowPixelFormat (HWND);
+        WindowSurface   = SDL_GetWindowSurface     (SDL_HWND);
+        WindowFormat    = SDL_GetWindowPixelFormat (SDL_HWND);
         
         WindowPixels = new Uint32[WIDTH * (HEIGHT + 400) + 1];
         memset(WindowPixels, 255, WIDTH * HEIGHT * sizeof(Uint32)); 
+        WIN_HWND = NULL;  
 
+
+SDL_SysWMinfo systemInfo; 
+SDL_VERSION(&systemInfo.version);
+SDL_GetWindowWMInfo(SDL_HWND, &systemInfo);
+
+WIN_HWND = systemInfo.info.win.window;
 
         thisGUI = nullptr;
-
+        CYCLE_TIMER =0;
         FrameCounter=0;
         CYCLE_COUNTER=0;
         FPS =0;
@@ -103,40 +127,13 @@ Window::Window(int x,int y,int width,int height,char *title)
 //-----------------------------------------------------------------------------------------------------------------
 
 
-        CallBacks.CallBackOnEvent          = NULL;
-        CallBacks.CallBackOnInputFocus     = NULL;
-        CallBacks.CallBackOnInputBlur      = NULL;
-        CallBacks.CallBackOnKeyDown        = NULL;
-        CallBacks.CallBackOnKeyUp          = NULL;
-        CallBacks.CallBackOnMouseFocus     = NULL;
-        CallBacks.CallBackOnMouseBlur      = NULL;
-        CallBacks.CallBackOnMouseMove      = NULL;
-        CallBacks.CallBackOnMouseWheel     = NULL;
-                                           
-        CallBacks.CallBackOnLButtonDown    = NULL;
-        CallBacks.CallBackOnLButtonUp      = NULL;
-        CallBacks.CallBackOnRButtonDown    = NULL;
-        CallBacks.CallBackOnRButtonUp      = NULL;
-        CallBacks.CallBackOnMButtonDown    = NULL;
-        CallBacks.CallBackOnMButtonUp      = NULL;
-                                         
-        CallBacks.CallBackOnJoyAxis        = NULL;
-        CallBacks.CallBackOnJoyButtonDown  = NULL;
-        CallBacks.CallBackOnJoyButtonUp    = NULL;
-        CallBacks.CallBackOnJoyHat         = NULL;
-        CallBacks.CallBackOnJoyBall        = NULL;
-        CallBacks.CallBackOnMinimize       = NULL;
-        CallBacks.CallBackOnRestore        = NULL;
-        CallBacks.CallBackOnResize         = NULL;
-        CallBacks.CallBackOnExpose         = NULL;
-        CallBacks.CallBackOnExit           = NULL;
-        CallBacks.CallBackOnUser           = NULL;
 
 
 
     SetActiveWindow(this);
 
-
+    Event.syswm.msg = nullptr;
+    SDL_EventState(SDL_SYSWMEVENT, SDL_ENABLE);
     OldMouseX =0;
     OldMouseY =0;
 }
@@ -147,7 +144,6 @@ bool SetActiveWindow(Window *active)
     else
         return false;
 }
-
 
 void Window::CLS(){
 
@@ -180,8 +176,11 @@ bool Window::LOOP_GAME()
 		CYCLE_TIMER = SDL_GetTicks();
  
 
-  		SDL_PollEvent(&Event);
-        EventHandler(Event);
+  		while(SDL_PollEvent(&Event))
+        {
+            EventHandler(Event);
+        }
+
 
         if (CallBacks.CallBackOnEvent != nullptr) 
             CallBacks.CallBackOnEvent(&Event);
@@ -193,24 +192,41 @@ bool Window::LOOP_GAME()
         OldMouseY = Mouse.Position.Y;
         Mouse.Angle = FindAngle( Mouse.MousePosition, Delta);
      
+
  return true;
  }
-
 void Window::EventHandler(SDL_Event &Event)
  {
-        if(thisGUI != nullptr) thisGUI->Update();
-
-        int XX =0,YY=0;
+        int XX = 0,
+            YY = 0;
         SDL_GetRendererOutputSize(Renderer, &XX, &YY);
-        
-           
 
-        switch (Event.type)
-        {
+//      UINT *Message =  &Event.syswm.msg->msg.win.msg;
+//      if(Message != nullptr) std::cout << *Message << std::endl;
 
-   
-              
-                // SDL_Log("Window %d exposed", event->window.windowID);
+        UINT   *Message = &Event.syswm.msg->msg.win.msg;
+        WPARAM *Handler = &Event.syswm.msg->msg.win.wParam;
+        int MX=0,MY=0;
+   switch (Event.type)
+    {
+               case SDL_SYSWMEVENT:
+               //    Print(Event.syswm.msg->msg.win.msg);
+                   switch(Event.syswm.msg->msg.win.msg)
+                   {
+                       case WM_COMMAND:
+                           for(Widgit *Buttons:  Widgit::WidgitList)
+                           {
+                               if(Event.syswm.msg->msg.win.wParam == Buttons->ID)
+                               {
+                                   if(Buttons->CallBacks.CallBackOnLButtonDown != nullptr)
+                                      Buttons->CallBacks.CallBackOnLButtonDown(Mouse.Position.X, Mouse.Position.Y);
+                               }
+                           }
+                       break;
+                   }
+               break;
+
+        // SDL_Log("Window %d exposed", event->window.windowID);
 //============================================================================= EXIT ============================================
                 case SDL_QUIT:
                         Alive  = false;
@@ -246,7 +262,7 @@ void Window::EventHandler(SDL_Event &Event)
                             if(CallBacks.CallBackOnMButtonUp != nullptr)
                                 CallBacks.CallBackOnMButtonUp( Mouse.Position.X, Mouse.Position.Y);
                         }
-
+                 break;
 //========================================================================== MOUSE BUTTON DOWN ====================================
 
                 case SDL_MOUSEBUTTONDOWN:
@@ -270,22 +286,19 @@ void Window::EventHandler(SDL_Event &Event)
                             if(CallBacks.CallBackOnMButtonDown != nullptr)
                                 CallBacks.CallBackOnMButtonDown( Mouse.Position.X, Mouse.Position.Y);
                         }
-
+                  break;
 //============================================================================================================================
-
-                        
- //=============================================================================== MOUSE MOTION ===============================
+//=========================================== MOUSE MOTION ===================================================================
 
                 case SDL_MOUSEMOTION:
-                        SDL_Point DELTA;
-                        DELTA.x = Event.motion.x;
-                        DELTA.y = Event.motion.y;
-                        
+
 				        Mouse.Position.X = Event.motion.x;
                         Mouse.Position.Y = Event.motion.y;
-                        Mouse.Velocity.X = Event.motion.x - Mouse.Position.X;
-                        Mouse.Velocity.Y = Event.motion.y - Mouse.Position.Y;
-                    
+
+                        SDL_GetRelativeMouseState(&MX,&MY); // FINALLY WORKING AND GETTING THE MOUSES VELOCITY IN XY COORDS
+                        Mouse.Velocity.X = MX;
+                        Mouse.Velocity.Y = MY;
+                  
 
                    if(CallBacks.CallBackOnMouseMove != nullptr)
                         CallBacks.CallBackOnMouseMove(Event.motion.x, Event.motion.y, Event.motion.xrel, Event.motion.yrel,  Mouse.Button.Left, Mouse.Button.Right, Mouse.Button.Center);
@@ -340,7 +353,7 @@ void Window::UNLOCK_PIXELS(){
 ///////////////////////////////// PRIMATIVE DRAWING OPERATIONS ////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void Window::SET_DRAW_COLOR     (unsigned long Col){
+void Window::SET_DRAW_COLOR (unsigned long Col){
          SCREEN->DRAW_COLOR = Col; //SETS THE DRAWING COLOR FOR ALL PRIMATIVE DRAWING OPERATIONS
 }
 
@@ -517,120 +530,194 @@ bool  Is_CLICK(int X, int Y){
 inline 
 int   MODULO(int x, int n){ return (x % n + n) % n ;}
 
-
 //=========================================================================================================================================
 //                               EXPERIMENTAL GUI CODE                                                                        
 //=========================================================================================================================================
 
-void Widgit::Update()
+
+void Window::AddMenu()
 {
-  
+    HMENU hMenu    = CreateMenu();
+    HMENU FileMenu = CreateMenu();
+    HMENU SubMenu  = CreateMenu();
+
+    AppendMenu(SubMenu, MF_STRING, NULL,"SubMenu");
+
+    AppendMenu(FileMenu,MF_STRING, 11, "New");
+    AppendMenu(FileMenu,MF_POPUP, (UINT_PTR)SubMenu, "Open");
+    AppendMenu(FileMenu,MF_STRING, 13, "Exit");
+
+
+    AppendMenu(hMenu,MF_POPUP, (UINT_PTR)FileMenu, "File");
+    AppendMenu(hMenu,MF_STRING, 2, "Edit");
+    AppendMenu(hMenu,MF_STRING, 3, "Help");
+    SetMenu(WIN_HWND, hMenu);
+}
+void Window::AddControls()
+{
+
+   HWND LABLE =  
+       CreateWindow("STATIC", 
+                    "Enter Text Here:",
+                     WS_VISIBLE | WS_CHILD | WS_BORDER,
+                     20,10,100,50, 
+                     WIN_HWND,
+                     NULL, NULL, NULL);
+   // TEXT INPUT BOX
+     HWND TEXTINPUT = 
+         CreateWindow("Edit", 
+                    "...",
+                     WS_VISIBLE | WS_CHILD | WS_BORDER | ES_MULTILINE | WS_VSCROLL,
+                     20,60,300,300, 
+                     WIN_HWND,
+                     NULL, NULL, NULL);
+
+     HWND BUTTON = 
+         CreateWindow("Button", 
+                    "Button Two",
+                     WS_VISIBLE | WS_CHILD,
+                     200, 380, 80,30, 
+                     WIN_HWND,
+                     NULL, NULL, NULL);
+
+     HWND BUTTON2 = 
+         CreateWindow("Button", 
+                    "Button One",
+                     WS_VISIBLE | WS_CHILD,
+                     50, 380, 80,30, 
+                     WIN_HWND,
+                     NULL, NULL, NULL);
+
+       
+
+
+
+HWND framehwnd =CreateWindowEx(WS_EX_WINDOWEDGE,
+                     "BUTTON",
+                     "Render Type", 
+                     WS_VISIBLE | WS_CHILD| BS_GROUPBOX,// <----BS_GROUPBOX does nothing on the grouping 
+                     400,10,
+                     400,100, 
+                     WIN_HWND, 
+                     NULL, 
+                     NULL, NULL);
+CreateWindowEx(WS_EX_WINDOWEDGE,
+                    "BUTTON",
+                    "first radio button", 
+                    WS_VISIBLE | WS_CHILD|BS_AUTORADIOBUTTON|WS_GROUP,  // <---- WS_GROUP group the following radio buttons 1st,2nd button 
+                    10,20,
+                    300,20, 
+                    WIN_HWND, //<----- Use main window handle
+                    (HMENU)NULL, 
+                    NULL, NULL);
+CreateWindowEx(WS_EX_WINDOWEDGE,
+                    "BUTTON",
+                    "second radio button", 
+                    WS_VISIBLE | WS_CHILD|BS_AUTORADIOBUTTON,  // Styles 
+                    10,55,
+                    300,20, 
+                    WIN_HWND, 
+                    (HMENU)NULL, 
+                    NULL, NULL);
+CreateWindowEx(WS_EX_WINDOWEDGE,
+                    "BUTTON",
+                    "third radio button", 
+                    WS_VISIBLE | WS_CHILD|BS_AUTOCHECKBOX|WS_GROUP,  //<---Start second group for 3rd,4th button
+                    10,570,
+                    300,20, 
+                    WIN_HWND, 
+                    (HMENU)NULL, 
+                    NULL, NULL);
+CreateWindowEx(WS_EX_WINDOWEDGE,
+                    "BUTTON",
+                    "forth radio button", 
+                    WS_VISIBLE | WS_CHILD|BS_AUTORADIOBUTTON,  // Styles 
+                    500,545,
+                    300,20, 
+                    WIN_HWND, 
+                    (HMENU)NULL, 
+                    NULL, NULL);
+
+
+
 }
 
-GUI::GUI(Window &parent)
+
+Widgit::~Widgit()
 {
-    parent.SetGUI(this);
-    NumberOfWidgits = 0;
-    this->Parent = &parent;
-}
-GUI::~GUI()
-{
-    for_loop(count,NumberOfWidgits)
+    for(Widgit *Child: Children)
     {
-        delete(Widgits[count]);
+        delete(Child);
     }
-}
-void GUI::Update()
-{
-    for(auto &W: Widgits)
-    {
-        W->Update();
-    }
+    delete(this);
 }
 
-
-
-
-
-
-
-
-Frame*    GUI::Make_Frame(Vec2 pos,Vec2 size)
+Widgit::Widgit( Window *parent, LPCTSTR type, LPCTSTR text, Rect dimensions, DWORD style , DWORD ExStyle)
+      : Parent(parent),
+        ID(NumberOfWidgits++),
+        Type(type), 
+        Position(Vec2(dimensions.x,dimensions.y)),  
+        Size(Vec2(dimensions.w,dimensions.h)),    
+        Text(text),
+        Style(WS_VISIBLE | WS_CHILD| style)
 {
-    Frame *TempFrame = new Frame(pos,size);
-    Widgits.push_back(TempFrame);
-    NumberOfWidgits++;
-    return TempFrame;
+    Handle = CreateWindowEx(ExStyle, type,
+                           text,
+                           Style,
+                           dimensions.x,
+                           dimensions.y,
+                           dimensions.w,
+                           dimensions.h,
+                           Parent->WIN_HWND,
+                           (HMENU)ID,
+                           NULL,
+                           NULL );
+    WidgitList.push_back(this);
 }
-Button*   GUI::Make_Button(int x, int y, int height, int width)
+Widgit *Widgit::MakeButton  (Rect dimensions, LPCTSTR text, DWORD style)
 {
-    Button *PushButton = new Button(x, y , height, width);
-
-    Widgits.push_back(PushButton);
-    return PushButton;
-}
-TextBox*  GUI::Make_TextBox(Vec2 topleft, float width)
-{
-    TextBox *box = new TextBox(topleft, width);
-
-    Widgits.push_back(box);
-    return box;
+    Widgit *Ret = new Widgit(Parent, "Button", text , dimensions, NULL, NULL);
+    Children.push_back(Ret);
+return Ret;
 }
 
-
-
-
-Frame::Frame(Vec2 pos,Vec2 size)
-     : Position(pos),
-       Size(size)
-{
+Widgit *Widgit::MakeTextBox (Vec2 pos, Vec2 size){
+ 
+    return NULL;
 }
-void Frame::Update()
-{
-    Render();
-}
-void Frame::Render()
-{
-    SCREEN->SET_DRAW_COLOR(RGB(150,150,150));
-    SCREEN->FILLED_BOX(Position.x,Position.y, 
-    Position.x + Size.w, Position.y +Size.h);
+Widgit *Widgit::MakeFrame   (Vec2 pos, Vec2 size){    return NULL;
 }
 
 
-TextBox::TextBox(Vec2 pos, float width)
-{
-     Position = pos;
-     Size     = Vec2(width, 20);
-}
-void TextBox::Update()
-{
-    Render();
-}
-void TextBox::Render()
-{
-    SCREEN->SET_DRAW_COLOR(RGB(255,255,255));
-    SCREEN->FILLED_BOX(Position.x,Position.y, 
-                    Position.x + Size.w, Position.y +Size.h);
-    SCREEN->SET_DRAW_COLOR(RGB(0,0,0));
-    SCREEN->BOX(Position.x,Position.y, 
-                    Position.x + Size.w, Position.y +Size.h);
-}
 
 
-Button::Button(int x, int y, float height, float width)
-{
-    Position = Vec2(x,y);
-    Size = Vec2(width,height);
-}
-void Button::Update()
-{
-    Render();
-}
-void Button::Render()
-{
-    SCREEN->SET_DRAW_COLOR(RGB(15,15,15));
-    SCREEN->FILLED_BOX(Position.x,Position.y, 
-                       Position.x + Size.w, Position.y +Size.h); 
-}  
-            
-    
+
+ 
+   
+
+
+
+
+
+
+//case SDL_SYSWMEVENT:
+//// Let's check it's type
+//
+//switch(event.syswm.msg->msg)
+//{
+// User selected a command item from a menu, a control sent
+// a notification message to its parent window, or an accelerator
+// keystroke was translated
+//
+//    case WM_COMMAND:
+// Who's job is this?
+//        switch(LOWORD(event.syswm.msg->wParam))
+//        {
+// File->Quit selected, so we're done
+//            case IDM_QUIT:
+//                done = true;
+//                break;
+//        }
+//        break;
+//}
+//break;
